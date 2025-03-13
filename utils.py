@@ -8,6 +8,44 @@ from pytransform3d.rotations import active_matrix_from_intrinsic_euler_xyz, matr
 from pytransform3d.transformations import transform_from, plot_transform
 from pytransform3d.camera import make_world_grid, world2image, plot_camera
 
+def euler_to_rotation_matrix(roll, pitch, yaw, format='rad'):
+    """
+    Converts Euler angles (roll, pitch, yaw) to a rotation matrix.
+    Args:
+    - roll, pitch, yaw: Euler angles in radians.
+
+    Returns:
+    - A 3x3 rotation matrix.
+    """
+
+    if format == 'deg':
+        roll, pitch, yaw = np.deg2rad(roll), np.deg2rad(pitch), np.deg2rad(yaw)
+    
+    # Roll (rotation around x-axis)
+    R_x = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+    
+    # Pitch (rotation around y-axis)
+    R_y = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+    
+    # Yaw (rotation around z-axis)
+    R_z = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+    
+    # Combined rotation matrix (Yaw * Pitch * Roll)
+    R = np.dot(R_z, np.dot(R_y, R_x))
+    return R
+
 def is_approx_rotation_matrix(R, tolerance=1e-4):
     if R.shape != (3, 3):
         raise ValueError(f"must be a 3x3 matrix:, instead  shape {R.shape=} {R=} ")
