@@ -9,20 +9,9 @@ import torch
 import torchvision
 
 
-if __name__ == "__main__":
+def track(model, video_path, output_path):
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--video_path", type=str, default=r'data/rendering.mkv')
-    parser.add_argument("--tracking_path", type=str, default=r'data/tracking.csv')
-    args = parser.parse_args()
-
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    print(torch.__version__)
-    print(torchvision.__version__)
-    print(f"Using device: {device}")
-
-    model = YOLO("yolo11n.pt").to(device)
-    results = model.track(args.video_path, show=False, save=False, stream=True)
+    results = model.track(video_path, show=False, save=False, stream=True)
 
     # Prepare a list to store results
     tracking_data = []
@@ -41,6 +30,24 @@ if __name__ == "__main__":
     df_tracking = pd.DataFrame(tracking_data, columns=["track_id", "frame_id", "bbox_x_center", "bbox_y_center", "bbox_width", "bbox_height"])
 
     # Save to CSV
-    df_tracking.to_csv("tracking_results.csv", index=False)
-    print("Tracking results saved to tracking_results.csv")
+    df_tracking.to_csv(output_path, index=False)
+    print(f"Tracking results saved to {output_path}")
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--video_path", type=str, default=r'data/rendering.mkv')
+    parser.add_argument("--output_path", type=str, default=r'data/tracking.csv')
+    args = parser.parse_args()
+
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print(torch.__version__)
+    print(torchvision.__version__)
+    print(f"Using device: {device}")
+
+    model = YOLO("yolo11n.pt").to(device)
+    
+    track(model, args.video_path, args.output_path)
+    
     

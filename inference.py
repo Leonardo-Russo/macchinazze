@@ -4,33 +4,13 @@ import torch
 import pandas as pd
 import numpy as np
 from pytransform3d.rotations import matrix_from_axis_angle
+import json
 
 from model import MLP
-from utils import getAzimuthElevation, lookat, matrix_from_axis_angle
+from utils import getAzimuthElevation, lookat, matrix_from_axis_angle, euler_to_rotation_matrix
 
 
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint_dir', type=str, default=r"cvpr\version_1", help='checkpoint path of the trained model')
-    parser.add_argument('--tracking_file', type=str, default=r"tracking.csv", help='CSV file containing tracking data')
-    args = parser.parse_args()
-
-    # Load the model from the checkpoint
-    model_dir = os.path.join("lightning_logs", args.checkpoint_dir)
-    for file in os.listdir(model_dir):
-        if file.endswith(".ckpt"):
-            checkpoint_path = os.path.join(model_dir, file)
-            break
-    if not checkpoint_path:
-        raise FileNotFoundError(f"No checkpoints found in {model_dir}")
-    
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    print(f"Using device: {device}")
-    
-    model = MLP.load_from_checkpoint(checkpoint_path).to(device)
-    print(f"Loading model from {checkpoint_path}")
-    print(model)
+def inference(model, tracking_file, config_file, output_path, debug=False):
 
     # Load CSV file using Pandas
     tracking_file = args.tracking_file
@@ -38,19 +18,27 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"File {tracking_file} not found")
     df = pd.read_csv(tracking_file)
 
-    focal_length=0.0036
-    sensor_size=(0.00367, 0.00274)
-    image_size=(640, 480)
+    # Load configuration parameters from the JSON file
+    config_file = args.config_file
+    if not os.path.exists(config_file):
+        raise FileNotFoundError(f"File {config_file} not found")
+    with open(config_file, 'r') as f:
+        config = json.load(f)
 
-    # Define camera pose
-    camera_position = np.array([5, 5, 5])
-    up = np.array([0, 0, 1])
-    from_point = camera_position
-    to_point = np.array([0, 0, 0])    # the camera always points at the origin of the world coordinates
+    focal_length = config["focal_length"]
+    sensor_size = tuple(config["sensor_size"])
+    image_size = tuple(config["image_size"])
 
-    # Compute Rotation Matrix
-    R_C2W, _ = lookat(from_point, to_point, up)
-    R_C2W = R_C2W @ matrix_from_axis_angle((1, 0, 0, np.pi))
+    # Extract Camera Position and Orientation
+    camera_position = np.array(config["camera_position"])
+    roll = config["camera_orientation"][0]
+    pitch = config["camera_orientation"][1]
+    yaw = config["camera_orientation"][2]
+    R_C2W = euler_to_rotation_matrix(roll, pitch, yaw)
+
+    if debug:
+        print(f"Camera Position: {camera_position}")
+        print(f"Camera Rotation Matrix: {R_C2W}")
 
     # Initialize new columns in DataFrame
     df["x_world_new"] = np.nan
@@ -72,7 +60,35 @@ if __name__ == "__main__":
         df.at[idx, "x_world_new"] = x_world_new
         df.at[idx, "y_world_new"] = y_world_new
 
-# Save updated DataFrame to a new CSV file
-df.to_csv("tracking_and_localization.csv", index=False)
+    # Save updated DataFrame to a new CSV file
+    df.to_csv(output_path, index=False)
+    print(f"Inference complete. Results saved to {output_path}")
 
-print("Inference complete. Results saved to tracking_updated.csv")
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--checkpoint_dir', type=str, default=r"cvpr\version_1", help='checkpoint path of the trained model')
+    parser.add_argument('--tracking_file', type=str, default=r"data\tracking.csv", help='CSV file containing tracking data')
+    parser.add_argument('--output_path', type=str, default=r'data\tracking_and_localization.csv', help='output path for the updated tracking data')
+    parser.add_argument('--config_file', type=str, default=r"data\config.json", help='Path to the config.json file')
+    parser.add_argument('--debug', type=bool, default=False, help='debugging mode')
+    args = parser.parse_args()
+
+    # Load the model from the checkpoint
+    model_dir = os.path.join("lightning_logs", args.checkpoint_dir)
+    for file in os.listdir(model_dir):
+        if file.endswith(".ckpt"):
+            checkpoint_path = os.path.join(model_dir, file)
+            break
+    if not checkpoint_path:
+        raise FileNotFoundError(f"No checkpoints found in {model_dir}")
+    
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print(f"Using device: {device}")
+    
+    model = MLP.load_from_checkpoint(checkpoint_path).to(device)
+    print(f"Loading model from {checkpoint_path}")
+    print(model)
+
+    inference(model, args.tracking_file, args.config_file, args.output_path, args.debug)
