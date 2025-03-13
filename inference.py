@@ -8,10 +8,12 @@ from pytransform3d.rotations import matrix_from_axis_angle
 from model import MLP
 from utils import getAzimuthElevation, lookat, matrix_from_axis_angle
 
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint_dir', type=str, default=r"cvpr\version_0", help='checkpoint path of the trained model')
+    parser.add_argument('--checkpoint_dir', type=str, default=r"cvpr\version_1", help='checkpoint path of the trained model')
+    parser.add_argument('--tracking_file', type=str, default=r"tracking.csv", help='CSV file containing tracking data')
     args = parser.parse_args()
 
     # Load the model from the checkpoint
@@ -31,7 +33,9 @@ if __name__ == "__main__":
     print(model)
 
     # Load CSV file using Pandas
-    tracking_file = "tracking.csv"
+    tracking_file = args.tracking_file
+    if not os.path.exists(tracking_file):
+        raise FileNotFoundError(f"File {tracking_file} not found")
     df = pd.read_csv(tracking_file)
 
     focal_length=0.0036
